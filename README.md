@@ -1,7 +1,7 @@
 # Análise de EEG com Algoritmos Genéticos
 
 ## Descrição
-Este projeto implementa um sistema de análise de Eletroencefalograma (EEG) utilizando Algoritmos Genéticos para classificação de padrões neurológicos. O sistema permite a simulação, visualização e análise de sinais EEG para diferentes condições neurológicas.
+Este projeto implementa um sistema de análise de Eletroencefalograma (EEG) utilizando Algoritmos Genéticos para classificação de padrões neurológicos. O sistema permite a simulação, visualização e análise de sinais EEG para diferentes condições neurológicas (doenças).
 
 ### Desenvolvido por:
 - **Aluno:** João Renan Santanna Lopes
@@ -12,7 +12,7 @@ Este projeto implementa um sistema de análise de Eletroencefalograma (EEG) util
 ## Funcionalidades
 
 ### 1. Geração de Sinais EEG
-- Simulação de 5 padrões diferentes:
+- Simulação de 5 padrões diferentes (doenças):
   - Normal
   - Epilepsia
   - Alzheimer
