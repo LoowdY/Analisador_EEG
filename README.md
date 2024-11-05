@@ -96,18 +96,7 @@ class AlgoritmoGeneticoEEG:
 
 ## 4. Implementação
 
-### 4.1 Estrutura do Sistema
-```
-Sistema
-├── Interface Gráfica
-│   ├── Controles
-│   └── Visualizações
-├── Gerador de Sinais
-├── Algoritmo Genético
-└── Análise de Resultados
-```
-
-### 4.2 Componentes Principais
+### 4.1 Componentes Principais
 1. **Gerador de Sinais**
    - Simulação de padrões EEG
    - Características específicas por condição
@@ -122,7 +111,7 @@ Sistema
    - Controles interativos
    - Exportação de resultados
 
-### 4.3 Parâmetros Configuráveis
+### 4.2 Parâmetros Configuráveis
 - Tamanho da população
 - Taxa de mutação
 - Número de gerações
