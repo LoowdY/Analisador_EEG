@@ -1,127 +1,144 @@
-# Análise de EEG usando Algoritmos Genéticos
+# Análise de EEG com Algoritmos Genéticos
 
-## Sobre o Projeto
-Este projeto implementa um sistema de análise de sinais de Eletroencefalograma (EEG) utilizando Algoritmos Genéticos para classificação de padrões neurológicos (simulações).
+## Descrição
+Este projeto implementa um sistema de análise de Eletroencefalograma (EEG) utilizando Algoritmos Genéticos para classificação de padrões neurológicos. O sistema permite a simulação, visualização e análise de sinais EEG para diferentes condições neurológicas.
 
-### Autores
+### Desenvolvido por:
 - **Aluno:** João Renan Santanna Lopes
 - **Professora:** Polyana Fonseca Nascimento
 - **Instituição:** CESUPA (Centro Universitário do Estado do Pará)
-- **Disciplina:** Algoritmos Genéticos
+- **Disciplina:** Inteligência Artificial - Algoritmos Genéticos - COmputação Evolutiva
 
-## Descrição
-O sistema implementa uma interface gráfica interativa para análise e classificação de padrões de EEG relacionados a diferentes condições neurológicas:
-- Normal
-- Epilepsia
-- Alzheimer
-- Parkinson
-- Depressão
+## Funcionalidades
 
-### Funcionalidades Principais
-1. **Geração de Sinais EEG**
-   - Simulação de padrões específicos para cada condição
-   - Visualização em tempo real do sinal
-   - Análise espectral com diferentes bandas de frequência
+### 1. Geração de Sinais EEG
+- Simulação de 5 padrões diferentes:
+  - Normal
+  - Epilepsia
+  - Alzheimer
+  - Parkinson
+  - Depressão
+- Duração configurável do sinal
+- Janela de visualização ajustável
 
-2. **Algoritmo Genético**
-   - População inicial aleatória
-   - Seleção por torneio
-   - Cruzamento uniforme
-   - Mutação gaussiana
-   - Visualização da evolução do fitness
-   - Análise da distribuição populacional
+### 2. Análise Espectral
+- Visualização das bandas de frequência:
+  - Delta (1-4 Hz)
+  - Theta (4-8 Hz)
+  - Alpha (8-13 Hz)
+  - Beta (13-30 Hz)
+- Densidade espectral de potência
+- Características espectrais normalizadas
 
-3. **Interface Gráfica**
-   - Controles interativos para parâmetros do AG
-   - Múltiplas visualizações em tempo real
-   - Exportação de resultados em Excel
-   - Análise detalhada dos resultados
+### 3. Algoritmo Genético
+- Parâmetros configuráveis:
+  - Tamanho da população
+  - Taxa de mutação
+  - Número de gerações
+- Visualização em tempo real da evolução
+- Análise da população através de boxplots
+- Tracking do melhor indivíduo
 
-### Características Técnicas
-- Extração de características do EEG:
-  - Potência nas bandas Delta, Theta, Alpha e Beta
-  - Características temporais
-  - Medidas de complexidade
-- Classificação genética com:
-  - População configurável
-  - Taxa de mutação ajustável
-  - Número de gerações personalizável
+### 4. Análise Estatística
+- Métricas do sinal:
+  - Amplitude máxima
+  - Média e mediana
+  - Desvio padrão
+  - RMS (Root Mean Square)
+  - Duração total
+- Características extraídas normalizadas
+- Evolução do fitness ao longo das gerações
+
+### 5. Exportação de Resultados
+- Formato Excel (.xlsx)
+- Múltiplas planilhas:
+  - Evolução do AG
+  - Melhor indivíduo
+  - Parâmetros utilizados
 
 ## Requisitos
 ```python
-numpy==1.24.3
-pandas==2.0.3
-matplotlib==3.7.2
-scipy==1.11.3
-scikit-learn==1.3.0
-openpyxl==3.1.2
+numpy
+pandas
+matplotlib
+scipy
+tkinter
+openpyxl
 ```
 
 ## Instalação
 1. Clone o repositório
 2. Instale as dependências:
 ```bash
-pip install -r requirements.txt
+pip install numpy pandas matplotlib scipy openpyxl
 ```
 
-## Uso
+## Como Usar
 1. Execute o programa:
 ```bash
 python main.py
 ```
 
 2. Na interface:
+   - Configure os parâmetros do AG
    - Selecione a condição neurológica
-   - Ajuste os parâmetros do AG
-   - Gere um novo sinal
-   - Inicie a evolução
-   - Analise os resultados
-   - Exporte os dados se necessário
+   - Defina a duração do sinal
+   - Ajuste a janela de visualização
+   - Clique em "Gerar Novo Sinal"
+   - Inicie a evolução do AG
+   - Analise os resultados em tempo real
+   - Exporte os resultados se necessário
 
 ## Estrutura do Projeto
 - `AlgoritmoGeneticoEEG`: Implementação do AG
 - `GeradorSinalEEG`: Simulação de sinais EEG
 - `AnalisadorEEG`: Interface gráfica e visualizações
 
-## Detalhes de Implementação
+## Características Técnicas
+
 ### Geração de Sinais
-- Simulação de componentes de frequência específicos
-- Adição de ruído controlado
-- Padrões característicos para cada condição
+- Frequência de amostragem: 256 Hz
+- Componentes específicos para cada condição
+- Ruído fisiológico modulado
+- Normalização automática
 
 ### Algoritmo Genético
-- Codificação: Vetor de pesos reais
-- Fitness: Baseado no erro quadrático
-- Seleção: Torneio (k=2)
-- Cruzamento: Uniforme
+- Representação: Vetor de características
+- Seleção: Torneio
+- Cruzamento: Ponto único
 - Mutação: Gaussiana
+- Fitness baseado em erro quadrático
 
 ### Visualizações
-1. **Sinal Temporal**
-   - Visualização do EEG bruto
-   - Marcações de eventos
-   
-2. **Evolução do AG**
-   - Gráfico de fitness médio
-   - Melhor fitness global
-   
-3. **Análise Populacional**
-   - Distribuição dos genes
-   - Boxplots por característica
-   - Marcação do melhor indivíduo
+1. **Sinal EEG**
+   - Visualização temporal
+   - Janela deslizante configurável
 
-## Contribuições e Melhorias Futuras
+2. **Análise Espectral**
+   - Densidade espectral de potência
+   - Bandas de frequência destacadas
+
+3. **Características**
+   - 10 características normalizadas
+   - Visualização em barras
+
+4. **Evolução do AG**
+   - Fitness médio por geração
+   - Melhor fitness global
+
+5. **População**
+   - Distribuição dos genes
+   - Melhor indivíduo destacado
+
+## Contribuições
+Este projeto faz parte de uma avaliação acadêmica e pode ser expandido com:
 - Implementação de dados reais de EEG
-- Adição de mais condições neurológicas
-- Otimização dos parâmetros do AG
-- Análise estatística mais detalhada
-- Interface com banco de dados
+- Adição de novos padrões neurológicos
+- Melhorias na interface gráfica
+- Otimização do algoritmo genético
 
 ## Licença
-Este projeto é destinado apenas para fins educacionais e de pesquisa.
-
-## Agradecimentos
-Agradecimentos especiais à Professora Polyana Fonseca Nascimento pela orientação e ao CESUPA pelo suporte ao desenvolvimento deste projeto.
+Este projeto é para fins educacionais e acadêmicos.
 
 ---
-*Este projeto foi desenvolvido como parte da disciplina de Inteligência Artificial no CESUPA, 2024.*
+Desenvolvido como parte da disciplina de Inteligência Artificial no CESUPA, 2024.
