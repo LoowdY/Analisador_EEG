@@ -7,7 +7,7 @@ Este projeto implementa um sistema de análise de Eletroencefalograma (EEG) util
 - **Aluno:** João Renan Santanna Lopes
 - **Professora:** Polyana Fonseca Nascimento
 - **Instituição:** CESUPA (Centro Universitário do Estado do Pará)
-- **Disciplina:** Inteligência Artificial - Algoritmos Genéticos - COmputação Evolutiva
+- **Disciplina:** Inteligência Artificial - Algoritmos Genéticos - Computação Evolutiva
 
 ## Funcionalidades
 
