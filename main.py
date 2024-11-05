@@ -6,7 +6,6 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from scipy import signal
 import time
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
 import random
 
 
@@ -123,37 +122,57 @@ class AlgoritmoGeneticoEEG:
 
 class GeradorSinalEEG:
     def __init__(self):
-        self.fs = 256  # Frequência de amostragem
+        self.fs = 256
 
     def gerar_sinal(self, doenca, duracao=1.0):
         t = np.linspace(0, duracao, int(self.fs * duracao))
         sinal = np.zeros_like(t)
 
+        # Componentes base
         if doenca == 'Normal':
-            sinal += 2 * np.sin(2 * np.pi * 10 * t)  # Alpha dominante
-            sinal += 0.5 * np.sin(2 * np.pi * 20 * t)  # Beta menor
+            # Alpha dominante posterior (8-13 Hz)
+            sinal += 2.0 * np.sin(2 * np.pi * 10 * t)
+            # Beta moderado (13-30 Hz)
+            sinal += 0.5 * np.sin(2 * np.pi * 20 * t)
 
         elif doenca == 'Epilepsia':
-            sinal += np.sin(2 * np.pi * 25 * t)
-            # Adiciona espículas
-            for _ in range(3):
+            # Atividade de base
+            sinal += 0.5 * np.sin(2 * np.pi * 3 * t)  # Delta aumentado
+            # Adiciona espículas epileptiformes
+            for _ in range(int(duracao * 3)):  # 3 espículas por segundo
                 pos = np.random.randint(0, len(t))
-                sinal[pos:pos + 10] += 3 * np.sin(2 * np.pi * 50 * t[:10])
+                width = int(0.1 * self.fs)  # 100ms
+                if pos + width < len(t):
+                    spike = 3.0 * signal.gaussian(width, std=width / 8)
+                    sinal[pos:pos + width] += spike
 
         elif doenca == 'Alzheimer':
-            sinal += 0.5 * np.sin(2 * np.pi * 3 * t)  # Delta aumentado
-            sinal += 0.3 * np.sin(2 * np.pi * 10 * t)  # Alpha reduzido
+            # Aumento de delta e theta
+            sinal += 1.5 * np.sin(2 * np.pi * 2 * t)  # Delta
+            sinal += 1.0 * np.sin(2 * np.pi * 6 * t)  # Theta
+            # Redução de alpha
+            sinal += 0.3 * np.sin(2 * np.pi * 10 * t)
 
         elif doenca == 'Parkinson':
-            sinal += 2 * np.sin(2 * np.pi * 20 * t)  # Beta aumentado
-            sinal += 0.5 * np.sin(2 * np.pi * 10 * t)  # Alpha reduzido
+            # Aumento de beta
+            sinal += 2.0 * np.sin(2 * np.pi * 20 * t)
+            # Tremor característico (4-6 Hz)
+            sinal += 1.0 * np.sin(2 * np.pi * 5 * t)
 
-        else:  # Depressão
-            sinal += np.sin(2 * np.pi * 10 * t)  # Alpha assimétrico
-            sinal += 0.3 * np.sin(2 * np.pi * 20 * t)  # Beta reduzido
+        elif doenca == 'Depressão':
+            # Assimetria alpha frontal
+            sinal += np.sin(2 * np.pi * 10 * t) * (1 + 0.3 * np.sin(2 * np.pi * 0.1 * t))
+            # Redução geral de atividade
+            sinal *= 0.7
 
-        # Adiciona ruído
-        sinal += 0.1 * np.random.randn(len(t))
+        # Adiciona ruído fisiológico
+        ruido = 0.1 * np.random.randn(len(t))
+        # Modula o ruído
+        ruido *= (1 + 0.2 * np.sin(2 * np.pi * 0.5 * t))
+        sinal += ruido
+
+        # Normaliza o sinal
+        sinal = sinal / np.max(np.abs(sinal))
 
         return sinal, t
 
@@ -210,6 +229,29 @@ class AnalisadorEEG(tk.Tk):
         frame_doenca = ttk.LabelFrame(self.frame_controles, text="Seleção de Condição")
         frame_doenca.pack(fill='x', padx=5, pady=5)
 
+        # Adiciona controle de duração
+        frame_tempo = ttk.LabelFrame(self.frame_controles, text="Configuração Temporal")
+        frame_tempo.pack(fill='x', padx=5, pady=5)
+
+        ttk.Label(frame_tempo, text="Duração (segundos):").pack(anchor='w')
+        self.duracao_var = tk.StringVar(value='1')
+        vcmd = (self.register(self.validar_duracao), '%P')
+        self.duracao_entry = ttk.Entry(frame_tempo,
+                                       textvariable=self.duracao_var,
+                                       validate='key',
+                                       validatecommand=vcmd)
+        self.duracao_entry.pack(fill='x', padx=5)
+
+        # Adiciona controle de visualização
+        self.janela_var = tk.StringVar(value='1')
+        ttk.Label(frame_tempo, text="Janela de Visualização (segundos):").pack(anchor='w')
+        vcmd_janela = (self.register(self.validar_duracao), '%P')
+        self.janela_entry = ttk.Entry(frame_tempo,
+                                      textvariable=self.janela_var,
+                                      validate='key',
+                                      validatecommand=vcmd_janela)
+        self.janela_entry.pack(fill='x', padx=5)
+
         self.doencas = ['Normal', 'Epilepsia', 'Alzheimer', 'Parkinson', 'Depressão']
         self.doenca_var = tk.StringVar(value='Normal')
 
@@ -242,12 +284,24 @@ class AnalisadorEEG(tk.Tk):
         ttk.Button(self.frame_controles, text="Exportar Resultados",
                    command=self.exportar_resultados).pack(fill='x', padx=5, pady=5)
 
+    def validar_duracao(self, valor):
+        """Valida entrada de duração para aceitar apenas números positivos"""
+        if valor == "":
+            return True
+        try:
+            num = float(valor)
+            return num > 0
+        except ValueError:
+            return False
+
+
     def criar_visualizacoes(self):
+        """Cria todas as visualizações e gráficos"""
         # Notebook para abas
         self.notebook = ttk.Notebook(self.frame_viz)
         self.notebook.pack(expand=True, fill='both')
 
-        # Aba de sinal temporal
+        # Aba do sinal temporal
         frame_temporal = ttk.Frame(self.notebook)
         self.notebook.add(frame_temporal, text="Sinal EEG")
 
@@ -256,37 +310,72 @@ class AnalisadorEEG(tk.Tk):
         self.canvas_temporal = FigureCanvasTkAgg(self.fig_temporal, frame_temporal)
         self.canvas_temporal.get_tk_widget().pack(fill='both', expand=True)
 
+        # Aba do espectro
+        frame_espectro = ttk.Frame(self.notebook)
+        self.notebook.add(frame_espectro, text="Análise Espectral")
+
+        self.fig_espectro = Figure(figsize=(8, 3))
+        self.ax_espectro = self.fig_espectro.add_subplot(111)
+        self.canvas_espectro = FigureCanvasTkAgg(self.fig_espectro, frame_espectro)
+        self.canvas_espectro.get_tk_widget().pack(fill='both', expand=True)
+
+        # Aba de características
+        frame_carac = ttk.Frame(self.notebook)
+        self.notebook.add(frame_carac, text="Características")
+
+        self.fig_carac = Figure(figsize=(8, 3))
+        self.ax_carac = self.fig_carac.add_subplot(111)
+        self.canvas_carac = FigureCanvasTkAgg(self.fig_carac, frame_carac)
+        self.canvas_carac.get_tk_widget().pack(fill='both', expand=True)
+
         # Aba de evolução do AG
         frame_evolucao = ttk.Frame(self.notebook)
         self.notebook.add(frame_evolucao, text="Evolução do AG")
 
-        self.fig_evolucao = Figure(figsize=(8, 6))
+        self.fig_evolucao = Figure(figsize=(8, 3))
         self.ax_evolucao = self.fig_evolucao.add_subplot(111)
         self.canvas_evolucao = FigureCanvasTkAgg(self.fig_evolucao, frame_evolucao)
         self.canvas_evolucao.get_tk_widget().pack(fill='both', expand=True)
 
-        # Aba de distribuição da população
+        # Aba de população
         frame_pop = ttk.Frame(self.notebook)
         self.notebook.add(frame_pop, text="População")
 
-        self.fig_pop = Figure(figsize=(8, 6))
+        self.fig_pop = Figure(figsize=(8, 3))
         self.ax_pop = self.fig_pop.add_subplot(111)
         self.canvas_pop = FigureCanvasTkAgg(self.fig_pop, frame_pop)
         self.canvas_pop.get_tk_widget().pack(fill='both', expand=True)
 
+        # Frame para estatísticas
+        frame_stats = ttk.LabelFrame(self.frame_viz, text="Estatísticas")
+        frame_stats.pack(fill='x', padx=5, pady=5)
+
+        self.label_stats = ttk.Label(frame_stats, text="", justify='left')
+        self.label_stats.pack(padx=5, pady=5)
+
+        # Configuração inicial dos gráficos
+        for ax in [self.ax_temporal, self.ax_espectro, self.ax_carac,
+                   self.ax_evolucao, self.ax_pop]:
+            ax.grid(True)
+
     def gerar_novo_sinal(self):
-        self.sinal_atual, self.tempo_atual = self.gerador_sinal.gerar_sinal(
-            self.doenca_var.get())
-        self.atualizar_visualizacoes()
+        try:
+            duracao = float(self.duracao_var.get())
+            self.sinal_atual, self.tempo_atual = self.gerador_sinal.gerar_sinal(
+                self.doenca_var.get(), duracao=duracao)
+            self.atualizar_visualizacoes()
 
-        # Reinicializa o AG
-        self.ag = AlgoritmoGeneticoEEG(
-            tamanho_pop=int(self.pop_size_var.get()),
-            taxa_mutacao=float(self.mut_rate_var.get())
-        )
+            # Reinicializa o AG
+            self.ag = AlgoritmoGeneticoEEG(
+                tamanho_pop=int(self.pop_size_var.get()),
+                taxa_mutacao=float(self.mut_rate_var.get())
+            )
 
-        self.label_geracao.config(text="Geração: 0")
-        self.label_fitness.config(text="Melhor Fitness: 0.0")
+            self.label_geracao.config(text="Geração: 0")
+            self.label_fitness.config(text="Melhor Fitness: 0.0")
+
+        except ValueError as e:
+            messagebox.showerror("Erro", "Valor de duração inválido!")
 
     def iniciar_evolucao(self):
             if self.sinal_atual is None:
@@ -331,36 +420,118 @@ class AnalisadorEEG(tk.Tk):
             self.evolucao_em_andamento = False
 
     def atualizar_visualizacoes(self):
-            try:
-                if self.sinal_atual is None:
-                    return
+        """Atualiza todas as visualizações dos gráficos"""
+        try:
+            if self.sinal_atual is None:
+                return
 
-                # Atualiza gráfico temporal
-                self.ax_temporal.clear()
-                self.ax_temporal.plot(self.tempo_atual, self.sinal_atual)
-                self.ax_temporal.set_title("Sinal EEG")
-                self.ax_temporal.set_xlabel("Tempo (s)")
-                self.ax_temporal.set_ylabel("Amplitude")
-                self.ax_temporal.grid(True)
-                self.canvas_temporal.draw()
+            # Atualiza gráfico temporal
+            self.ax_temporal.clear()
+            janela = float(self.janela_var.get())
 
-                # Limpa outros gráficos
-                self.ax_evolucao.clear()
-                self.ax_evolucao.set_title("Evolução do Fitness")
-                self.ax_evolucao.set_xlabel("Geração")
-                self.ax_evolucao.set_ylabel("Fitness")
-                self.ax_evolucao.grid(True)
-                self.canvas_evolucao.draw()
+            # Calcula índices para a janela de visualização
+            amostras_por_janela = int(janela * self.gerador_sinal.fs)
+            total_amostras = len(self.sinal_atual)
 
-                self.ax_pop.clear()
-                self.ax_pop.set_title("Distribuição da População")
-                self.ax_pop.set_xlabel("Gene")
-                self.ax_pop.set_ylabel("Valor")
-                self.ax_pop.grid(True)
-                self.canvas_pop.draw()
+            if amostras_por_janela < total_amostras:
+                self.ax_temporal.plot(self.tempo_atual[:amostras_por_janela],
+                                      self.sinal_atual[:amostras_por_janela],
+                                      'b-', linewidth=1)
+            else:
+                self.ax_temporal.plot(self.tempo_atual, self.sinal_atual,
+                                      'b-', linewidth=1)
 
-            except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao atualizar visualizações: {str(e)}")
+            self.ax_temporal.set_title(f"Sinal EEG - {self.doenca_var.get()}")
+            self.ax_temporal.set_xlabel("Tempo (s)")
+            self.ax_temporal.set_ylabel("Amplitude")
+            self.ax_temporal.grid(True)
+
+            # Atualiza análise espectral
+            self.ax_espectro.clear()
+            f, pxx = signal.welch(self.sinal_atual, fs=self.gerador_sinal.fs,
+                                  nperseg=min(256, len(self.sinal_atual)))
+
+            self.ax_espectro.semilogy(f, pxx, 'b-', linewidth=1)
+
+            # Adiciona bandas de frequência
+            for (fmin, fmax, cor, nome) in [
+                (1, 4, 'red', 'Delta'),
+                (4, 8, 'green', 'Theta'),
+                (8, 13, 'blue', 'Alpha'),
+                (13, 30, 'yellow', 'Beta')
+            ]:
+                mask = (f >= fmin) & (f <= fmax)
+                self.ax_espectro.fill_between(f[mask], pxx[mask],
+                                              alpha=0.3, color=cor, label=f'{nome} ({fmin}-{fmax} Hz)')
+
+            self.ax_espectro.set_title("Análise Espectral")
+            self.ax_espectro.set_xlabel("Frequência (Hz)")
+            self.ax_espectro.set_ylabel("Densidade Espectral")
+            self.ax_espectro.set_xlim(0, 40)
+            self.ax_espectro.grid(True)
+            self.ax_espectro.legend()
+
+            # Atualiza características
+            self.ax_carac.clear()
+
+            # Extrai e normaliza características
+            caracteristicas = [
+                ('Delta', np.mean(pxx[(f >= 1) & (f <= 4)])),
+                ('Theta', np.mean(pxx[(f >= 4) & (f <= 8)])),
+                ('Alpha', np.mean(pxx[(f >= 8) & (f <= 13)])),
+                ('Beta', np.mean(pxx[(f >= 13) & (f <= 30)])),
+                ('Variância', np.var(self.sinal_atual)),
+                ('Amplitude Pico', np.max(np.abs(self.sinal_atual))),
+                ('Cruzamentos Zero', np.sum(np.diff(np.signbit(self.sinal_atual))) / len(self.sinal_atual)),
+                ('Entropia', np.sum(np.abs(np.diff(self.sinal_atual)))),
+                ('Mobilidade', np.std(np.diff(self.sinal_atual)) / np.std(self.sinal_atual)),
+                ('Complexidade', np.log10(np.std(self.sinal_atual)))
+            ]
+
+            nomes = [c[0] for c in caracteristicas]
+            valores = [c[1] for c in caracteristicas]
+
+            # Normaliza valores para melhor visualização
+            valores = np.array(valores)
+            valores = (valores - np.min(valores)) / (np.max(valores) - np.min(valores))
+
+            # Plota características
+            barras = self.ax_carac.bar(range(len(caracteristicas)), valores)
+            self.ax_carac.set_xticks(range(len(caracteristicas)))
+            self.ax_carac.set_xticklabels(nomes, rotation=45, ha='right')
+
+            # Adiciona valores sobre as barras
+            for i, bar in enumerate(barras):
+                height = bar.get_height()
+                self.ax_carac.text(bar.get_x() + bar.get_width() / 2., height,
+                                   f'{valores[i]:.2f}',
+                                   ha='center', va='bottom', rotation=0)
+
+            self.ax_carac.set_title("Características Normalizadas do Sinal")
+            self.ax_carac.grid(True)
+
+            # Atualiza estatísticas
+            stats_text = (
+                f"Estatísticas do Sinal:\n"
+                f"Amplitude Máxima: {np.max(np.abs(self.sinal_atual)):.2f}\n"
+                f"Média: {np.mean(self.sinal_atual):.2f}\n"
+                f"Mediana: {np.median(self.sinal_atual):.2f}\n"
+                f"Desvio Padrão: {np.std(self.sinal_atual):.2f}\n"
+                f"RMS: {np.sqrt(np.mean(np.square(self.sinal_atual))):.2f}\n"
+                f"Duração Total: {len(self.sinal_atual) / self.gerador_sinal.fs:.2f}s"
+            )
+            self.label_stats.config(text=stats_text)
+
+            # Atualiza todos os canvas
+            self.canvas_temporal.draw()
+            self.canvas_espectro.draw()
+            self.canvas_carac.draw()
+            self.canvas_evolucao.draw()
+            self.canvas_pop.draw()
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao atualizar visualizações: {str(e)}")
+            raise e
 
     def atualizar_grafico_evolucao(self):
             try:
