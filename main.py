@@ -120,9 +120,52 @@ class AlgoritmoGeneticoEEG:
                 np.min(self.fitness_scores))
 
 
+class CondicoesParada:
+    def __init__(self):
+        self.historico_fitness = []
+        self.melhor_fitness_historico = []
+        self.tolerancia = 1e-6
+        self.geracoes_sem_melhoria = 0
+
+    def convergencia_populacao(self, populacao, threshold=0.01):
+        """Verifica se a população convergiu (indivíduos muito similares)"""
+        fitness_std = np.std([np.std(ind) for ind in populacao])
+        return fitness_std < threshold
+
+    def estagnacao_melhor_fitness(self, fitness, num_geracoes=10):
+        """Verifica se o melhor fitness não melhorou nas últimas N gerações"""
+        self.melhor_fitness_historico.append(fitness)
+        if len(self.melhor_fitness_historico) < num_geracoes:
+            return False
+
+        ultimas_n = self.melhor_fitness_historico[-num_geracoes:]
+        melhoria = np.max(ultimas_n) - ultimas_n[0]
+        return melhoria < self.tolerancia
+
+    def estagnacao_media_fitness(self, fitness_medio, num_geracoes=10):
+        """Verifica se a média do fitness não melhorou nas últimas N gerações"""
+        self.historico_fitness.append(fitness_medio)
+        if len(self.historico_fitness) < num_geracoes:
+            return False
+
+        ultimas_n = self.historico_fitness[-num_geracoes:]
+        melhoria = np.max(ultimas_n) - ultimas_n[0]
+        return melhoria < self.tolerancia
+
+    def reset(self):
+        """Reseta os históricos"""
+        self.historico_fitness = []
+        self.melhor_fitness_historico = []
+        self.geracoes_sem_melhoria = 0
+
 class GeradorSinalEEG:
     def __init__(self):
         self.fs = 256
+
+    def gaussian_pulse(self, width, std):
+        """Gera um pulso gaussiano manualmente"""
+        x = np.linspace(-width/2, width/2, width)
+        return np.exp(-(x**2) / (2*std**2))
 
     def gerar_sinal(self, doenca, duracao=1.0):
         t = np.linspace(0, duracao, int(self.fs * duracao))
@@ -143,7 +186,8 @@ class GeradorSinalEEG:
                 pos = np.random.randint(0, len(t))
                 width = int(0.1 * self.fs)  # 100ms
                 if pos + width < len(t):
-                    spike = 3.0 * signal.gaussian(width, std=width / 8)
+                    # Usa nossa própria função gaussiana
+                    spike = 3.0 * self.gaussian_pulse(width, width/8)
                     sinal[pos:pos + width] += spike
 
         elif doenca == 'Alzheimer':
@@ -152,18 +196,25 @@ class GeradorSinalEEG:
             sinal += 1.0 * np.sin(2 * np.pi * 6 * t)  # Theta
             # Redução de alpha
             sinal += 0.3 * np.sin(2 * np.pi * 10 * t)
+            # Adiciona lentificação característica
+            sinal *= (1 + 0.3 * np.sin(2 * np.pi * 0.5 * t))
 
         elif doenca == 'Parkinson':
             # Aumento de beta
             sinal += 2.0 * np.sin(2 * np.pi * 20 * t)
             # Tremor característico (4-6 Hz)
             sinal += 1.0 * np.sin(2 * np.pi * 5 * t)
+            # Adiciona variabilidade do tremor
+            tremor_freq = 5 + 0.5 * np.sin(2 * np.pi * 0.3 * t)
+            sinal += 0.8 * np.sin(2 * np.pi * tremor_freq * t)
 
         elif doenca == 'Depressão':
             # Assimetria alpha frontal
             sinal += np.sin(2 * np.pi * 10 * t) * (1 + 0.3 * np.sin(2 * np.pi * 0.1 * t))
             # Redução geral de atividade
             sinal *= 0.7
+            # Adiciona componente de baixa frequência
+            sinal += 0.3 * np.sin(2 * np.pi * 0.2 * t)
 
         # Adiciona ruído fisiológico
         ruido = 0.1 * np.random.randn(len(t))
@@ -209,7 +260,7 @@ class AnalisadorEEG(tk.Tk):
         self.criar_visualizacoes()
 
     def criar_controles(self):
-        # Parâmetros
+        # Parâmetros do AG
         frame_params = ttk.LabelFrame(self.frame_controles, text="Parâmetros do AG")
         frame_params.pack(fill='x', padx=5, pady=5)
 
@@ -229,29 +280,6 @@ class AnalisadorEEG(tk.Tk):
         frame_doenca = ttk.LabelFrame(self.frame_controles, text="Seleção de Condição")
         frame_doenca.pack(fill='x', padx=5, pady=5)
 
-        # Adiciona controle de duração
-        frame_tempo = ttk.LabelFrame(self.frame_controles, text="Configuração Temporal")
-        frame_tempo.pack(fill='x', padx=5, pady=5)
-
-        ttk.Label(frame_tempo, text="Duração (segundos):").pack(anchor='w')
-        self.duracao_var = tk.StringVar(value='1')
-        vcmd = (self.register(self.validar_duracao), '%P')
-        self.duracao_entry = ttk.Entry(frame_tempo,
-                                       textvariable=self.duracao_var,
-                                       validate='key',
-                                       validatecommand=vcmd)
-        self.duracao_entry.pack(fill='x', padx=5)
-
-        # Adiciona controle de visualização
-        self.janela_var = tk.StringVar(value='1')
-        ttk.Label(frame_tempo, text="Janela de Visualização (segundos):").pack(anchor='w')
-        vcmd_janela = (self.register(self.validar_duracao), '%P')
-        self.janela_entry = ttk.Entry(frame_tempo,
-                                      textvariable=self.janela_var,
-                                      validate='key',
-                                      validatecommand=vcmd_janela)
-        self.janela_entry.pack(fill='x', padx=5)
-
         self.doencas = ['Normal', 'Epilepsia', 'Alzheimer', 'Parkinson', 'Depressão']
         self.doenca_var = tk.StringVar(value='Normal')
 
@@ -259,6 +287,57 @@ class AnalisadorEEG(tk.Tk):
             ttk.Radiobutton(frame_doenca, text=doenca,
                             variable=self.doenca_var,
                             value=doenca).pack(anchor='w', padx=5)
+
+        # Configuração temporal
+        frame_tempo = ttk.LabelFrame(self.frame_controles, text="Configuração Temporal")
+        frame_tempo.pack(fill='x', padx=5, pady=5)
+
+        ttk.Label(frame_tempo, text="Duração (segundos):").pack(anchor='w')
+        self.duracao_var = tk.StringVar(value='5')
+        vcmd = (self.register(self.validar_duracao), '%P')
+        self.duracao_entry = ttk.Entry(frame_tempo,
+                                       textvariable=self.duracao_var,
+                                       validate='key',
+                                       validatecommand=vcmd)
+        self.duracao_entry.pack(fill='x', padx=5)
+
+        ttk.Label(frame_tempo, text="Janela de Visualização (segundos):").pack(anchor='w')
+        self.janela_var = tk.StringVar(value='5')
+        self.janela_entry = ttk.Entry(frame_tempo,
+                                      textvariable=self.janela_var,
+                                      validate='key',
+                                      validatecommand=vcmd)
+        self.janela_entry.pack(fill='x', padx=5)
+
+        # Condições de Parada
+        frame_parada = ttk.LabelFrame(self.frame_controles, text="Condições de Parada")
+        frame_parada.pack(fill='x', padx=5, pady=5)
+
+        # Checkbuttons para cada condição
+        self.parada_geracoes = tk.BooleanVar(value=True)
+        ttk.Checkbutton(frame_parada, text="Número de Gerações",
+                        variable=self.parada_geracoes).pack(anchor='w', padx=5)
+
+        self.parada_convergencia = tk.BooleanVar(value=False)
+        ttk.Checkbutton(frame_parada, text="Convergência da População",
+                        variable=self.parada_convergencia).pack(anchor='w', padx=5)
+
+        self.parada_melhor = tk.BooleanVar(value=False)
+        ttk.Checkbutton(frame_parada, text="Estagnação do Melhor Fitness",
+                        variable=self.parada_melhor).pack(anchor='w', padx=5)
+
+        self.parada_media = tk.BooleanVar(value=False)
+        ttk.Checkbutton(frame_parada, text="Estagnação do Fitness Médio",
+                        variable=self.parada_media).pack(anchor='w', padx=5)
+
+        # Parâmetros das condições de parada
+        ttk.Label(frame_parada, text="Gerações sem Melhoria:").pack(anchor='w')
+        self.geracoes_estagnacao = tk.StringVar(value='10')
+        ttk.Entry(frame_parada, textvariable=self.geracoes_estagnacao).pack(fill='x', padx=5)
+
+        ttk.Label(frame_parada, text="Threshold Convergência:").pack(anchor='w')
+        self.threshold_convergencia = tk.StringVar(value='0.01')
+        ttk.Entry(frame_parada, textvariable=self.threshold_convergencia).pack(fill='x', padx=5)
 
         # Status
         frame_status = ttk.LabelFrame(self.frame_controles, text="Status")
@@ -378,43 +457,88 @@ class AnalisadorEEG(tk.Tk):
             messagebox.showerror("Erro", "Valor de duração inválido!")
 
     def iniciar_evolucao(self):
-            if self.sinal_atual is None:
-                messagebox.showwarning("Aviso", "Gere um sinal primeiro!")
-                return
+        if self.sinal_atual is None:
+            messagebox.showwarning("Aviso", "Gere um sinal primeiro!")
+            return
 
-            self.evolucao_em_andamento = True
-            self.btn_parar.config(state='normal')
+        self.evolucao_em_andamento = True
+        self.btn_parar.config(state='normal')
 
-            try:
-                num_geracoes = int(self.num_gen_var.get())
-                doenca_alvo = self.doenca_var.get()
+        try:
+            num_geracoes = int(self.num_gen_var.get())
+            doenca_alvo = self.doenca_var.get()
+            geracoes_estagnacao = int(self.geracoes_estagnacao.get())
+            threshold = float(self.threshold_convergencia.get())
 
-                for geracao in range(num_geracoes):
-                    if not self.evolucao_em_andamento:
-                        break
+            # Inicializa controlador de parada
+            condicoes_parada = CondicoesParada()
 
-                    media_fitness, melhor_fitness, pior_fitness = self.ag.evoluir(
-                        self.sinal_atual, doenca_alvo)
+            # Variáveis para tracking de resultados
+            resultados = {
+                'geracao_parada': 0,
+                'motivo_parada': 'Número máximo de gerações atingido',
+                'convergencia_atingida': False,
+                'estagnacao_melhor': False,
+                'estagnacao_media': False
+            }
 
-                    self.label_geracao.config(text=f"Geração: {geracao + 1}")
-                    self.label_fitness.config(text=f"Melhor Fitness: {melhor_fitness:.4f}")
+            for geracao in range(num_geracoes):
+                if not self.evolucao_em_andamento:
+                    resultados['motivo_parada'] = 'Parado pelo usuário'
+                    break
 
-                    self.atualizar_grafico_evolucao()
-                    self.atualizar_grafico_populacao()
+                media_fitness, melhor_fitness, pior_fitness = self.ag.evoluir(
+                    self.sinal_atual, doenca_alvo)
 
-                    self.update()
-                    time.sleep(0.1)
+                # Verifica condições de parada
+                parar = False
 
-                self.btn_parar.config(state='disabled')
-                self.evolucao_em_andamento = False
+                if self.parada_convergencia.get():
+                    if condicoes_parada.convergencia_populacao(self.ag.populacao, threshold):
+                        parar = True
+                        resultados['motivo_parada'] = "População convergiu"
+                        resultados['convergencia_atingida'] = True
 
-                if self.ag.melhor_individuo is not None:
-                    self.mostrar_resultados_finais()
+                if self.parada_melhor.get():
+                    if condicoes_parada.estagnacao_melhor_fitness(melhor_fitness, geracoes_estagnacao):
+                        parar = True
+                        resultados['motivo_parada'] = "Melhor fitness estagnado"
+                        resultados['estagnacao_melhor'] = True
 
-            except Exception as e:
-                messagebox.showerror("Erro", f"Erro durante a evolução: {str(e)}")
-                self.evolucao_em_andamento = False
-                self.btn_parar.config(state='disabled')
+                if self.parada_media.get():
+                    if condicoes_parada.estagnacao_media_fitness(media_fitness, geracoes_estagnacao):
+                        parar = True
+                        resultados['motivo_parada'] = "Fitness médio estagnado"
+                        resultados['estagnacao_media'] = True
+
+                self.label_geracao.config(text=f"Geração: {geracao + 1}")
+                self.label_fitness.config(text=f"Melhor Fitness: {melhor_fitness:.4f}")
+
+                self.atualizar_grafico_evolucao()
+                self.atualizar_grafico_populacao()
+
+                self.update()
+                time.sleep(0.1)
+
+                if parar:
+                    resultados['geracao_parada'] = geracao + 1
+                    messagebox.showinfo("Evolução Finalizada",
+                                        f"Algoritmo parou após {geracao + 1} gerações\n"
+                                        f"Motivo: {resultados['motivo_parada']}")
+                    break
+
+                resultados['geracao_parada'] = geracao + 1
+
+            self.btn_parar.config(state='disabled')
+            self.evolucao_em_andamento = False
+
+            if self.ag.melhor_individuo is not None:
+                self.mostrar_resultados_finais(resultados)
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro durante a evolução: {str(e)}")
+            self.evolucao_em_andamento = False
+            self.btn_parar.config(state='disabled')
 
     def parar_evolucao(self):
             self.evolucao_em_andamento = False
@@ -619,44 +743,75 @@ class AnalisadorEEG(tk.Tk):
             except Exception as e:
                 messagebox.showerror("Erro", f"Erro ao exportar resultados: {str(e)}")
 
-    def mostrar_resultados_finais(self):
-            try:
-                janela = tk.Toplevel(self)
-                janela.title("Resultados da Evolução")
-                janela.geometry("400x500")
+    def mostrar_resultados_finais(self, resultados):
+        try:
+            janela = tk.Toplevel(self)
+            janela.title("Resultados da Evolução")
+            janela.geometry("400x600")
 
-                frame = ttk.Frame(janela, padding="10")
-                frame.pack(fill='both', expand=True)
+            frame = ttk.Frame(janela, padding="10")
+            frame.pack(fill='both', expand=True)
 
-                ttk.Label(frame, text="Resultados da Classificação",
-                          font=('Helvetica', 12, 'bold')).pack(pady=10)
+            # Título
+            ttk.Label(frame, text="Resultados da Classificação",
+                      font=('Helvetica', 12, 'bold')).pack(pady=10)
 
-                ttk.Label(frame, text=f"Doença Simulada: {self.doenca_var.get()}",
-                          font=('Helvetica', 10)).pack(pady=5)
+            # Informações básicas
+            ttk.Label(frame, text=f"Doença Simulada: {self.doenca_var.get()}",
+                      font=('Helvetica', 10)).pack(pady=5)
 
-                ttk.Label(frame, text="\nMétricas de Evolução:",
-                          font=('Helvetica', 10, 'bold')).pack(pady=5)
+            # Métricas da evolução
+            ttk.Label(frame, text="\nMétricas de Evolução:",
+                      font=('Helvetica', 10, 'bold')).pack(pady=5)
 
-                ttk.Label(frame, text=f"Número de Gerações: {self.ag.geracao_atual}").pack()
-                ttk.Label(frame, text=f"Melhor Fitness: {self.ag.melhor_fitness:.4f}").pack()
+            ttk.Label(frame, text=f"Gerações Executadas: {resultados['geracao_parada']}").pack()
+            ttk.Label(frame, text=f"Melhor Fitness: {self.ag.melhor_fitness:.4f}").pack()
+            ttk.Label(frame, text=f"Fitness Médio Final: {self.ag.historico_fitness[-1]:.4f}").pack()
+
+            # Condições de parada utilizadas
+            ttk.Label(frame, text="\nCondições de Parada Utilizadas:",
+                      font=('Helvetica', 10, 'bold')).pack(pady=5)
+
+            if self.parada_geracoes.get():
+                ttk.Label(frame, text=f"• Número máximo de gerações: {self.num_gen_var.get()}").pack()
+
+            if self.parada_convergencia.get():
+                status = "Atingida" if resultados['convergencia_atingida'] else "Não atingida"
                 ttk.Label(frame,
-                          text=f"Fitness Médio Final: {self.ag.historico_fitness[-1]:.4f}").pack()
+                          text=f"• Convergência da população (threshold: {self.threshold_convergencia.get()}) - {status}").pack()
 
-                ttk.Label(frame, text="\nCaracterísticas do Melhor Indivíduo:",
-                          font=('Helvetica', 10, 'bold')).pack(pady=5)
+            if self.parada_melhor.get():
+                status = "Atingida" if resultados['estagnacao_melhor'] else "Não atingida"
+                ttk.Label(frame,
+                          text=f"• Estagnação do melhor fitness ({self.geracoes_estagnacao.get()} gerações) - {status}").pack()
 
-                tree = ttk.Treeview(frame, columns=('Gene', 'Valor'), show='headings', height=10)
-                tree.heading('Gene', text='Gene')
-                tree.heading('Valor', text='Valor')
-                tree.pack(pady=10)
+            if self.parada_media.get():
+                status = "Atingida" if resultados['estagnacao_media'] else "Não atingida"
+                ttk.Label(frame,
+                          text=f"• Estagnação do fitness médio ({self.geracoes_estagnacao.get()} gerações) - {status}").pack()
 
-                for i, valor in enumerate(self.ag.melhor_individuo):
-                    tree.insert('', 'end', values=(f'Gene {i + 1}', f'{valor:.4f}'))
+            # Motivo da parada
+            ttk.Label(frame, text="\nMotivo da Parada:",
+                      font=('Helvetica', 10, 'bold')).pack(pady=5)
+            ttk.Label(frame, text=resultados['motivo_parada']).pack()
 
-                ttk.Button(frame, text="Fechar", command=janela.destroy).pack(pady=10)
+            # Características do melhor indivíduo
+            ttk.Label(frame, text="\nCaracterísticas do Melhor Indivíduo:",
+                      font=('Helvetica', 10, 'bold')).pack(pady=5)
 
-            except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao mostrar resultados: {str(e)}")
+            tree = ttk.Treeview(frame, columns=('Gene', 'Valor'), show='headings', height=10)
+            tree.heading('Gene', text='Gene')
+            tree.heading('Valor', text='Valor')
+            tree.pack(pady=10)
+
+            for i, valor in enumerate(self.ag.melhor_individuo):
+                tree.insert('', 'end', values=(f'Gene {i + 1}', f'{valor:.4f}'))
+
+            # Botão para fechar
+            ttk.Button(frame, text="Fechar", command=janela.destroy).pack(pady=10)
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao mostrar resultados: {str(e)}")
 
 if __name__ == "__main__":
     app = AnalisadorEEG()
